@@ -82,3 +82,51 @@ class Scoreboard:
         self.screen.blit(self.high_score_image, self.high_score_rect)
         self.screen.blit(self.level_image, self.level_rect)
         self.ships.draw(self.screen)
+        
+        # 如果飞船有激活的护盾，显示护盾条
+        if self.ai_game.ship.shield_active:
+            self.draw_shield_bar()
+
+    def show_score(self):
+        """Draw scores, level, and ships to the screen."""
+        self.screen.blit(self.score_image, self.score_rect)
+        self.screen.blit(self.high_score_image, self.high_score_rect)
+        self.screen.blit(self.level_image, self.level_rect)
+        self.ships.draw(self.screen)
+        
+        # 如果飞船有激活的护盾，显示护盾条
+        if self.ai_game.ship.shield_active:
+            self.draw_shield_bar()
+
+    def draw_shield_bar(self):
+        """绘制护盾条"""
+        # 护盾条位置
+        x = 10
+        y = self.ai_game.ship.rect.height + 20
+        
+        # 护盾条尺寸
+        BAR_LENGTH = 100
+        BAR_HEIGHT = 10
+        
+        # 计算填充长度（基于剩余的抵挡次数）
+        fill = (self.ai_game.ship.shield_hits / 3) * BAR_LENGTH
+        if fill < 0:
+            fill = 0
+            
+        # 绘制外框
+        outline_rect = pygame.Rect(x, y, BAR_LENGTH, BAR_HEIGHT)
+        
+        # 绘制填充部分
+        fill_rect = pygame.Rect(x, y, fill, BAR_HEIGHT)
+        
+        # 根据剩余抵挡次数选择颜色
+        if self.ai_game.ship.shield_hits >= 2:
+            color = (0, 255, 0)  # 绿色
+        elif self.ai_game.ship.shield_hits == 1:
+            color = (255, 255, 0)  # 黄色
+        else:
+            color = (255, 0, 0)  # 红色
+            
+        # 绘制护盾条
+        pygame.draw.rect(self.screen, color, fill_rect)
+        pygame.draw.rect(self.screen, (255, 255, 255), outline_rect, 2)

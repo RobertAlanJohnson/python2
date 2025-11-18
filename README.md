@@ -1,9 +1,9 @@
 
-# Alien Invasion Expansion - 作业项目说明
+# Alien Invasion - 作业项目说明
 
 ## 1. 项目概述（Project Overview）
 
-本项目基于 Pygame 开发的经典游戏《外星人入侵》（Alien Invasion）进行功能扩展，在原游戏基础上新增核心玩法与体验优化，完成课程作业要求的功能迭代。
+本项目基于经典游戏《外星人入侵》（Alien Invasion）进行开发，在原游戏基础上新增核心玩法与体验优化，完成课程作业的要求。
 
 ## 2. 环境配置（Environment Setup）
 
@@ -48,8 +48,9 @@ python2/
 ├── game_stats.py           # 游戏状态管理（得分、最高分、游戏进度）
 ├── sounds/                 # 音效资源文件夹
 │   ├── shoot.wav           # 射击音效
-│   ├── explode.wav         # 爆炸音效（外星人/护盾被击中）
-│   └── shield_hit.wav      # 护盾撞击音效
+│   ├── explode.wav         # 爆炸音效（外星人被击中）
+│   ├── background.mp3      # 背景音乐
+│   └── shield_hit.wav      # 护盾被击音效
 └── README.md               # 项目说明文档（本文件）
 ```
 

@@ -1,5 +1,6 @@
 import sys
 from time import sleep
+import random
 
 import pygame
 
@@ -9,7 +10,7 @@ from scoreboard import Scoreboard
 from button import Button
 from ship import Ship
 from bullet import Bullet
-from alien import Alien
+from alien import Alien, AlienBullet
 
 
 class AlienInvasion:
@@ -39,6 +40,7 @@ class AlienInvasion:
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
+        self.alien_bullets = pygame.sprite.Group()  # 外星人子弹组
 
         self._create_fleet()
 
@@ -47,12 +49,17 @@ class AlienInvasion:
 
         # Make the Play button.
         self.play_button = Button(self, "Play")
+        
+        # 添加激活护盾的按键标志
+        self.shield_key_pressed = False
     
     def _load_sounds(self):
         """加载游戏音效"""
         try:
             self.shoot_sound = pygame.mixer.Sound("sounds/shoot.wav")
             self.explosion_sound = pygame.mixer.Sound("sounds/explosion.wav")
+            self.alien_shoot_sound = pygame.mixer.Sound("sounds/alien_shoot.wav")  # 外星人射击音效
+            self.shield_hit_sound = pygame.mixer.Sound("sounds/shield_hit.wav")  # 护盾被击中音效
             
             # 加载并播放背景音乐
             pygame.mixer.music.load("sounds/background.mp3")
@@ -62,6 +69,8 @@ class AlienInvasion:
             # 如果无法加载音效文件，设置为None
             self.shoot_sound = None
             self.explosion_sound = None
+            self.alien_shoot_sound = None
+            self.shield_hit_sound = None
             print(f"Warning: Could not load sound files. Sounds will be disabled. Error: {e}")
 
     def run_game(self):
@@ -73,19 +82,18 @@ class AlienInvasion:
                 self.ship.update()
                 self._update_bullets()
                 self._update_aliens()
+                self._update_alien_bullets()  # 更新外星人子弹
 
             self._update_screen()
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.stats.save_high_score()  
-                    pygame.quit()
-                    sys.exit()
+            
             self.clock.tick(60)
 
     def _check_events(self):
         """Respond to keypresses and mouse events."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                self.stats.save_high_score()
+                pygame.quit()
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 self._check_keydown_events(event)
@@ -111,6 +119,7 @@ class AlienInvasion:
 
             # Get rid of any remaining bullets and aliens.
             self.bullets.empty()
+            self.alien_bullets.empty()  # 清空外星人子弹
             self.aliens.empty()
 
             # Create a new fleet and center the ship.
@@ -133,6 +142,13 @@ class AlienInvasion:
             sys.exit()
         elif event.key == pygame.K_SPACE:
             self._fire_bullet()
+        elif event.key == pygame.K_s:  # 按S键激活/隐藏护盾
+            if not self.shield_key_pressed:
+                self.shield_key_pressed = True
+                if not self.ship.shield_active:
+                    self.ship.activate_shield()
+                else:
+                    self.ship.deactivate_shield()
 
     def _check_keyup_events(self, event):
         """Respond to key releases."""
@@ -140,6 +156,8 @@ class AlienInvasion:
             self.ship.moving_right = False
         elif event.key == pygame.K_LEFT:
             self.ship.moving_left = False
+        elif event.key == pygame.K_s:
+            self.shield_key_pressed = False
 
     def _fire_bullet(self):
         """Create a new bullet and add it to the bullets group."""
@@ -183,6 +201,7 @@ class AlienInvasion:
         if not self.aliens:
             # Destroy existing bullets and create new fleet.
             self.bullets.empty()
+            self.alien_bullets.empty()  # 清空外星人子弹
             self._create_fleet()
             self.settings.increase_speed()
 
@@ -190,8 +209,41 @@ class AlienInvasion:
             self.stats.level += 1
             self.sb.prep_level()
 
+    def _update_alien_bullets(self):
+        """更新外星人子弹"""
+        # 更新子弹位置
+        self.alien_bullets.update()
+        
+        # 清除消失的子弹
+        for bullet in self.alien_bullets.copy():
+            if bullet.rect.top >= self.settings.screen_height:
+                self.alien_bullets.remove(bullet)
+        
+        # 检查子弹是否击中飞船（包括护盾）
+        for bullet in self.alien_bullets.copy():
+            # 如果飞船有激活的护盾，检查是否击中护盾
+            if self.ship.shield_active:
+                # 计算子弹与飞船中心的距离
+                distance = ((bullet.rect.centerx - self.ship.rect.centerx) ** 2 + 
+                           (bullet.rect.centery - self.ship.rect.centery) ** 2) ** 0.5
+                # 如果子弹在护盾范围内
+                if distance <= self.ship.shield_radius:
+                    # 护盾吸收攻击 - 减少一次可抵挡的攻击次数
+                    self.ship.hit_shield(1)
+                    self.alien_bullets.remove(bullet)  # 移除子弹
+                    
+                    # 播放护盾被击中音效
+                    if self.shield_hit_sound:
+                        self.shield_hit_sound.play()
+                    continue  # 继续检查下一个子弹
+            
+            # 如果没有护盾或者子弹未击中护盾，检查是否直接击中飞船
+            if self.ship.rect.colliderect(bullet.rect):
+                self.alien_bullets.remove(bullet)
+                self._ship_hit()
+
     def _ship_hit(self):
-        """Respond to the ship being hit by an alien."""
+        """Respond to the ship being hit by an alien or alien bullet."""
         if self.stats.ships_left > 0:
             # Decrement ships_left, and update scoreboard.
             self.stats.ships_left -= 1
@@ -203,11 +255,15 @@ class AlienInvasion:
 
             # Get rid of any remaining bullets and aliens.
             self.bullets.empty()
+            self.alien_bullets.empty()
             self.aliens.empty()
 
             # Create a new fleet and center the ship.
             self._create_fleet()
             self.ship.center_ship()
+            
+            # 重置护盾状态
+            self.ship.deactivate_shield()
 
             # Pause.
             sleep(0.5)
@@ -222,10 +278,31 @@ class AlienInvasion:
         """Check if the fleet is at an edge, then update positions."""
         self._check_fleet_edges()
         self.aliens.update()
+        
+        # 外星人随机射击
+        for alien in self.aliens.sprites():
+            if alien.can_shoot():
+                alien_bullet = alien.shoot()
+                self.alien_bullets.add(alien_bullet)
+                
+                # 播放外星人射击音效
+                if self.alien_shoot_sound:
+                    self.alien_shoot_sound.play()
 
         # Look for alien-ship collisions.
-        if pygame.sprite.spritecollideany(self.ship, self.aliens):
-            self._ship_hit()
+        alien_collisions = pygame.sprite.spritecollide(self.ship, self.aliens, False)
+        if alien_collisions:
+            # 检查是否有护盾可以保护飞船
+            if not self.ship.hit_shield(30):  # 外星人撞击造成30点伤害
+                self._ship_hit()
+            else:
+                # 护盾吸收了撞击，移除撞击的外星人
+                for alien in alien_collisions:
+                    alien.kill()
+                    
+                # 播放护盾被击中音效
+                if self.shield_hit_sound:
+                    self.shield_hit_sound.play()
 
         # Look for aliens hitting the bottom of the screen.
         self._check_aliens_bottom()
@@ -283,6 +360,10 @@ class AlienInvasion:
             bullet.draw_bullet()
         self.ship.blitme()
         self.aliens.draw(self.screen)
+        
+        # 绘制外星人子弹
+        for bullet in self.alien_bullets.sprites():
+            bullet.draw_bullet()
 
         # Draw the score information.
         self.sb.show_score()
